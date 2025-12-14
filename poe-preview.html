@@ -1,0 +1,233 @@
+<!DOCTYPE html><html lang="en"><head><meta name="x-poe-datastore-behavior" content="local_only"><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com https://fonts.googleapis.com https://fonts.gstatic.com https://pfst.cf2.poecdn.net https://puc.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com https://picsum.photos https://images.unsplash.com; frame-src 'self' https://www.youtube.com https://trytako.com; child-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests; block-all-mixed-content;">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Narita Navigator</title>
+    <!-- 1. Include Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 2. Include Vue.js -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        /* A little extra style for a smooth experience */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        /* Prevents content from hiding behind the fixed nav bar */
+        .pb-20 {
+            padding-bottom: 7rem; 
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <div id="app" class="pb-20">
+
+        <!-- Header -->
+        <header class="bg-white shadow-md sticky top-0 z-10">
+            <div class="max-w-md mx-auto p-4 flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-gray-800">Narita Navigator ✈️</h1>
+            </div>
+        </header>
+
+        <main class="max-w-md mx-auto p-4">
+
+            <!-- SCHEDULE TAB -->
+            <div v-if="activeTab === 'schedule'">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">Your Itinerary</h2>
+                <!-- Day Cards -->
+                <div v-for="day in itinerary" :key="day.day" class="bg-white rounded-xl shadow-lg p-5 mb-6">
+                    <h3 class="text-lg font-bold text-blue-600 border-b pb-2 mb-3">{{ day.day }}: {{ day.date }}</h3>
+                    <ul>
+                        <li v-for="event in day.events" class="flex items-start mb-3">
+                            <span class="bg-blue-100 text-blue-800 text-xs font-semibold mr-3 px-2.5 py-1 rounded-full w-20 text-center">{{ event.time }}</span>
+                            <p class="text-gray-700 flex-1">{{ event.description }}</p>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- MAP TAB -->
+            <div v-if="activeTab === 'map'">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">📍 Key Locations</h2>
+                <p class="text-gray-600 mb-6">Tap any location to open it in Google Maps!</p>
+                <div class="space-y-3">
+                    <a v-for="loc in locations" :key="loc.name" :href="loc.googleMapsUrl" target="_blank" class="flex items-center bg-white p-4 rounded-xl shadow-lg hover:bg-gray-100 transition-colors">
+                        <span class="text-2xl mr-4">{{ loc.emoji }}</span>
+                        <div>
+                            <p class="font-semibold text-gray-800">{{ loc.name }}</p>
+                            <p class="text-sm text-blue-500">Open in Maps →</p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+            <!-- SPENDING TAB -->
+            <div v-if="activeTab === 'spending'">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">💸 Spending Tracker</h2>
+                <!-- Total Display -->
+                <div class="bg-gradient-to-r from-green-400 to-blue-500 text-white p-6 rounded-xl shadow-lg mb-6">
+                    <p class="text-lg">Total Spent</p>
+                    <p class="text-4xl font-bold">{{ formatCurrency(totalSpending) }}</p>
+                </div>
+                <!-- Add Expense Form -->
+                <div class="bg-white p-4 rounded-xl shadow-lg mb-6">
+                    <h3 class="font-semibold mb-2">Add a New Expense</h3>
+                    <div class="flex space-x-2">
+                        <input v-model="newSpendingDescription" type="text" placeholder="e.g., Sushi lunch" class="flex-grow border rounded-lg p-2">
+                        <input v-model.number="newSpendingAmount" type="number" placeholder="¥1500" class="w-24 border rounded-lg p-2">
+                        <button @click="addSpendingItem" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600">+</button>
+                    </div>
+                </div>
+                <!-- Expense List -->
+                <div class="space-y-2">
+                    <div v-for="(item, index) in spendingItems" :key="index" class="bg-white p-3 rounded-lg shadow flex justify-between items-center">
+                        <p class="text-gray-800">{{ item.description }}</p>
+                        <p class="font-semibold text-gray-600">{{ formatCurrency(item.amount) }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SHOPPING LIST TAB -->
+            <div v-if="activeTab === 'shopping'">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">🛍️ Shopping List</h2>
+                <!-- Add Item Form -->
+                <div class="bg-white p-4 rounded-xl shadow-lg mb-6 flex space-x-2">
+                    <input v-model="newShoppingItem" @keyup.enter="addShoppingItem" type="text" placeholder="Add a new item..." class="flex-grow border rounded-lg p-2">
+                    <button @click="addShoppingItem" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600">Add</button>
+                </div>
+                <!-- List -->
+                <div class="bg-white rounded-xl shadow-lg p-4">
+                    <ul class="divide-y divide-gray-200">
+                        <li v-for="(item, index) in shoppingList" :key="index" class="py-3 flex items-center">
+                            <input type="checkbox" v-model="item.done" class="h-5 w-5 rounded text-blue-500 border-gray-300 focus:ring-blue-500">
+                            <label :class="{'line-through text-gray-400': item.done}" class="ml-3 text-gray-800 flex-grow">{{ item.text }}</label>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="fixed bottom-0 left-0 right-0 bg-white border-t shadow-t-lg max-w-md mx-auto">
+            <div class="flex justify-around">
+                <button @click="activeTab = 'schedule'" :class="{'text-blue-600 border-t-2 border-blue-600': activeTab === 'schedule'}" class="w-full p-4 text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <span class="text-xs">Schedule</span>
+                </button>
+                <button @click="activeTab = 'map'" :class="{'text-blue-600 border-t-2 border-blue-600': activeTab === 'map'}" class="w-full p-4 text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <span class="text-xs">Map</span>
+                </button>
+                <button @click="activeTab = 'spending'" :class="{'text-blue-600 border-t-2 border-blue-600': activeTab === 'spending'}" class="w-full p-4 text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8l3 5m0 0l3-5m-3 5v4m0 0H8m4 0h4m-4-8a2 2 0 11-4 0 2 2 0 014 0zM3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                    <span class="text-xs">Spending</span>
+                </button>
+                <button @click="activeTab = 'shopping'" :class="{'text-blue-600 border-t-2 border-blue-600': activeTab === 'shopping'}" class="w-full p-4 text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    <span class="text-xs">Shopping</span>
+                </button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- 3. The Vue App Script -->
+    <script>
+        const { createApp } = Vue
+
+        createApp({
+            data() {
+                return {
+                    activeTab: 'schedule',
+                    itinerary: [
+                        {
+                            day: 'Day 1',
+                            date: 'Dec 17th',
+                            events: [
+                                { time: '06:30', description: '🛬 Arrive at Narita (NRT)!' },
+                                { time: '07:22', description: '🚌 Shuttle to Narita Gateway Hotel' },
+                                { time: '09:18', description: '🛍️ Shuttle to AEON MALL Narita' },
+                                { time: 'All Day', description: 'Shopping: Pharmacy, Daiso, Muji, GU, Uniqlo, Taiyo' },
+                                { time: 'Lunch', description: '🍜 Ramen at Ramen Yamaokaya' },
+                                { time: 'Dinner', description: '🍲 Shabu-Shabu at Dontei' },
+                                { time: '21:05', description: '🚌 Shuttle back to the hotel' },
+                            ]
+                        },
+                        {
+                            day: 'Day 2',
+                            date: 'Dec 18th',
+                            events: [
+                                { time: '10:18', description: '🏨 Leave hotel for Narita Station' },
+                                { time: '11:30', description: '🚶‍♂️ Walk down Naritasan Omotesando' },
+                                { time: '12:30', description: '🍣 Sushi lunch at Narita Edokko Sushi' },
+                                { time: '13:00', description: '🚌 Bus to Shisui Premium Outlets' },
+                                { time: '13:30', description: '✨ Shopping at the outlets!' },
+                                { time: '19:35', description: '🚉 Shuttle back to Narita Station' },
+                                { time: '20:50', description: '🏨 Shuttle back to the hotel' },
+                            ]
+                        },
+                        {
+                            day: 'Day 3',
+                            date: 'Dec 19th',
+                            events: [
+                                { time: '10:18', description: '🛍️ Last-minute shopping at AEON MALL' },
+                                { time: 'Lunch', description: '🍱 Final lunch at AEON Mall' },
+                                { time: '14:35', description: '🏨 Shuttle back to hotel' },
+                                { time: '15:15', description: '✈️ Shuttle to Narita Airport' },
+                                { time: '18:00', description: '🛫 Flight CX 505 to Hong Kong. Sayonara!' },
+                            ]
+                        }
+                    ],
+                    locations: [
+                        { name: 'Narita Gateway Hotel', emoji: '🏨', googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Narita+Gateway+Hotel' },
+                        { name: 'AEON MALL Narita', emoji: '🛍️', googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=AEON+MALL+Narita' },
+                        { name: 'Ramen Yamaokaya', emoji: '🍜', googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Ramen+Yamaokaya+Narita' },
+                        { name: 'Dontei Narita', emoji: '🍲', googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Dontei+Narita' },
+                        { name: 'Naritasan Omotesando', emoji: '🚶‍♂️', googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Naritasan+Omotesando' },
+                        { name: 'Narita Edokko Sushi', emoji: '🍣', googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Narita+Edokko+Sushi+Sandōhonten' },
+                        { name: 'Shisui Premium Outlets', emoji: '✨', googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Shisui+Premium+Outlets' },
+                        { name: 'Narita Airport (NRT)', emoji: '✈️', googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Narita+International+Airport' },
+                    ],
+                    shoppingList: [
+                        { text: 'Japanese KitKat flavors', done: false },
+                        { text: 'Heattech clothing from Uniqlo', done: false },
+                        { text: 'Skincare from a pharmacy', done: false },
+                    ],
+                    newShoppingItem: '',
+                    spendingItems: [
+                        { description: 'Ramen Lunch', amount: 1200 },
+                        { description: 'Daiso Haul', amount: 550 },
+                    ],
+                    newSpendingDescription: '',
+                    newSpendingAmount: null,
+                }
+            },
+            computed: {
+                totalSpending() {
+                    return this.spendingItems.reduce((total, item) => total + item.amount, 0);
+                }
+            },
+            methods: {
+                addShoppingItem() {
+                    if (this.newShoppingItem.trim() === '') return;
+                    this.shoppingList.push({ text: this.newShoppingItem, done: false });
+                    this.newShoppingItem = '';
+                },
+                addSpendingItem() {
+                    if (!this.newSpendingDescription || !this.newSpendingAmount) return;
+                    this.spendingItems.push({ 
+                        description: this.newSpendingDescription, 
+                        amount: this.newSpendingAmount 
+                    });
+                    this.newSpendingDescription = '';
+                    this.newSpendingAmount = null;
+                },
+                formatCurrency(value) {
+                    return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(value);
+                }
+            }
+        }).mount('#app')
+    </script>
+
+
+
+</body></html>
